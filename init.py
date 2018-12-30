@@ -106,6 +106,8 @@ from datetime import datetime, timedelta
 
 rollbooks = {}
 
+
+
 def book2(member, course):
     for i in range(member['count']):
         print("count {}".format(i))

@@ -1,18 +1,27 @@
-from flask import Flask, request, jsonify, session, Session
+from flask import Flask, request, jsonify, session, Session, render_template
 import pymongo
-
+from datetime import datetime
 app = Flask(__name__)
 # app.config['JSON_AS_ASCII'] = False
 db = pymongo.MongoClient()
 rollbook_db = db.artistpizza.rollbooks
 members_db = db.artistpizza.members
 
-@app.route('/')
-def index():
-    return "hello"
+def get_today_code():
+    date = datetime.today()
+    return int(date.strftime('%y%m%d'))
+
+@app.route('/rollbook')
+def route_rollbook_view():
+    today = get_today_code()
+    today = 190103
+    rollbook = rollbook_db.find_one({"_id": today})
+    del rollbook['_id']
+    title = "{} 출석부".format(today)
+    return render_template("rollbook.html", title=title, rollbook=rollbook)
 
 @app.route('/attend', methods=['POST'])
-def route_attend():
+def route_attend_api():
     print(request.json)
     attend_request = request.json
     date = attend_request['date']
@@ -35,14 +44,14 @@ def route_attend():
     else:
         return jsonify(dict(message="not booked"))
 
-
+# api
 @app.route('/rollbook/<date>', methods=['POST', 'GET', 'PUT'])
-def route_rollbook(date):
+def route_rollbook_api(date):
     if request.method == 'POST':
         rollbook = request.json
         return jsonify(rollbook_db.incert_one(rollbook))
     elif request.method == 'GET':
-        return jsonify(rollbook_db.find_one({"date": date}))
+        return jsonify(rollbook_db.find_one({"_id": int(date)}))
     elif request.method == 'PUT':
         rollbook = request.json
         return jsonify(rollbook_db.save(rollbook))
