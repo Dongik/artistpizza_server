@@ -14,13 +14,12 @@
  <!-- Class "mdl-data-table-selectable" -->
  <div align="center">
  <h4>Artistpizza</h4>
- <h4>{{ title }}</h4>
+ <h4>{{ rollbook.title }}</h4>
  <table class="mdl-data-table mdl-shadow--2dp">
   <thead>
     <tr>
       <th class="mdl-data-table__cell--non-numeric">이름</th>
       <th>출석</th>
-      <th>수업</th>
     </tr>
   </thead>
   <tbody>
@@ -28,7 +27,6 @@
     <tr>
       <td class="mdl-data-table__cell--non-numeric">{{ key }}</td>
       <td>{{ value.check }}</td>
-      <td>{{ value.course }}</td>
     </tr>
    {% endfor %}
   </tbody>
