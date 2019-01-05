@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Artistpizza {{title}} 출석부</title>
+    </head>
+    <body>
+        {% for course,rollbook  in attendance.items() %}
+        <div class="container">
+            <h2>{{ course }}</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                      <th>회원번호</th>
+                      <th>이름</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for id, name in rollbook.items() %}
+                    <tr>
+                      <td>{{ id }}</td>
+                      <td>{{ name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </body>
+</html>

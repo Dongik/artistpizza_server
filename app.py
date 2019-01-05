@@ -14,99 +14,88 @@ cors = CORS(app, resources={
 
 
 db = pymongo.MongoClient()
-rollbook_db = db.artistpizza.rollbooks
 members_db = db.artistpizza.members
-classes_db = db.artistpizza.classes
+attendance_db = db.artistpizza.attendances
 
-def get_today_code():
-    date = datetime.today()
-    return int(date.strftime('%y%m%d'))
+def get_today():
+    return int(datetime.today().strftime('%y%m%d'))
 
 
-@app.route('/api/weekdata', methods=['GET', 'PUT'])
-# @cross_origin(supports_credentials=True)
-# @cross_origin(origins=['http://0.0.0.0:5000/'])
-def route_week_data():
-    if request.method == 'GET':
-        week_id = datetime.today().strftime('%y년%W주차')
-        week_class = classes_db.find_one({"_id":week_id})
-        return jsonify(week_class)
+def get_this_week():
+    return int(datetime.today().strftime('%y%W'))
+
+def get_attendance():
+    attendance = attendance_db.find_one({"_id": get_today()})
+    if attendance is None:
+        attendance_db.save({"_id": get_today(), "유화": {}, "수채화": {}})
+        attendance = attendance_db.find_one({"_id": get_today()})
+    return attendance
+
+
+@app.route('/members', methods=['GET', 'POST', 'PUT'])
+def route_members_view():
+    if request.method == 'POST':
+        member = request.form
+        members_db.incert_one(member)
     elif request.method == 'PUT':
-        # print(request.json)
-        week_data = request.json
-        # print(week_data)
-        classes_db.save(week_data)
-        # return "good"
-        return jsonify(dict(message="good"))
+        member = request.form
+        members_db.save(member)
+    members = members_db.find()
+    return render_template("members.html", members=members)
 
+@app.route('/attendance')
+def route_attendance_view():
+    attendance = attendance_db.find_one({"_id": get_today()})
+    del attendance['_id']
+    return render_template("attendance.html", title=get_today(),attendance=attendance)
 
-@app.route('/class')
-def route_class_view():
-    query = request.json
-    week_id = query['week_id']
-    week_class = classes_db.find_one({"_id":week_id})
-    rollbook = week_class[query['day']][query['time']][query['course']]
-    rollbook['title'] = "{0} {1} {2} {3}".format(week_id, query['day'], query['time'], query['course'])
-    return render_template("rollbook.html", rollbook=rollbook)
-
-@app.route('/rollbook')
-def route_rollbook_view():
-    day = request.args.get('day')
-    time = request.args.get('time')
-    course = request.args.get('course')
-    name = request.args.get('name')
-    today = get_today_code()
-    # today = 190103
-    rollbook = rollbook_db.find_one({"day": day, "time": time, "course": course, "name": name})
-    del rollbook['_id']
-    title = "{} 출석부".format(name)
-    return render_template("rollbook.html", title=title, rollbook=rollbook)
 
 @app.route('/attend', methods=['POST'])
 def route_attend_api():
     print(request.json)
     attend_request = request.json
-    current_week = ""
-    member_id = int(attend_request['member_id'])
-    rollbook = rollbook_db.find_one({"_id": date})
-    class_board = classes_db.find_one({"_id": current_week})
+    member_id = attend_request['member_id']
     member = members_db.find_one({"_id": member_id})
-    course = member['course']
     if member is None:
-        return jsonify(dict(message="wrong member id"))
-    member_name = member['name']
-    rollbook = class_board[course['day']][course['time']][course['course']]
-    if member_name in rollbook:
-        print("check {}".format(rollbook[member_name]))
-        if rollbook[member_name]['check'] == False:
-            member['count'] -= 1
-            members_db.save(member)
-            rollbook[member_name]['check'] = True
-            rollbook_db.save(rollbook)
-            return jsonify(dict(message="success"))
-        else:
-            return jsonify(dict(message="already checked"))
+        return jsonify(dict(message="일치하는 회원정보가 없어요"))
+    course = member['course']
+    attendance = get_attendance()
+    if member_id in attendance[course]:
+        return jsonify(dict(message="오늘은 이미 출석했습니다."))
+    elif member['count'] == 0:
+        return jsonify(dict(message="남은 수업횟수가 없습니다."))
+    elif member['expire_date'] < get_today():
+        member['count'] = 0
+        members_db.save(member)
+        return jsonify(dict(message="수업기한이 지났습니다."))
     else:
-        return jsonify(dict(message="not booked"))
-
-# api
-@app.route('/rollbook', methods=['POST', 'GET', 'PUT'])
-def route_rollbook_api(date):
-    if request.method == 'POST':
-        rollbook = request.json
-        return jsonify(rollbook_db.incert_one(rollbook))
-    elif request.method == 'GET':
-        return jsonify(rollbook_db.find_one({"_id": int(date)}))
-    elif request.method == 'PUT':
-        rollbook = request.json
-        return jsonify(rollbook_db.save(rollbook))
-
-# @app.route('/weekclass', methods=['GET'])
-# def route_weekclass():
-#     return jsonify(rollbook_db.find({""}))
+        attendance[course][member_id] = member['name']
+        member['count'] -= 1
+        attendance_db.save(attendance)
+        members_db.save(member)
+        return jsonify(dict(message="출석체크 했습니다."))
 
 
-@app.route('/members', methods=['POST', 'GET', 'PUT'])
+@app.route('/ask/<pin>', methods=['GET'])
+def route_ask_api(pin):
+    member = members_db.find_one({"_id": pin})
+    if member is None:
+        return jsonify(dict(message="없는 번호입니다.", is_attendable=False))
+    attendance = get_attendance()
+    print(attendance)
+    if pin in attendance[member['course']]:
+        return jsonify(dict(message="이미 출석하셨습니다.", is_attendable=False))
+    if member['expire_date'] < get_today():
+        member['count'] = 0
+        members_db.save(member)
+        return jsonify(dict(message="수업기한이 지났습니다."), is_attendable=False)
+    if member['count'] == 0:
+        return jsonify(dict(message="수업횟수를 소진하셨습니다.", is_attendable=False))
+    else:
+        return jsonify(dict(message="{}님 반갑습니다.".format(member['name']), is_attendable=True))
+
+
+@app.route('/api/members', methods=['POST', 'GET', 'PUT'])
 def route_member():
     if request.method == 'POST':
         member = request.json
